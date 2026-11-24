@@ -52,6 +52,49 @@ class DeviceHealthService(BaseModuleService):
         return {"terminal": terminal, "interval_s": interval, "packet_loss": loss,
                 "backlog": backlog, "health_status": status}
 
+    def summarize_shift(self, handover_id: int, role: str | None = None) -> dict[str, Any]:
+        """心跳汇总关联班次实际落盘点：输出常规缺点、高温复采区段与补采缺口。"""
+        handover_svc = self._safe_import(
+            "app.services.shift_handover", "ShiftHandoverService")()
+        summary = handover_svc.heartbeat_summary(handover_id, role=role)
+        # 心跳汇总落盘，便于值守按终端复核落盘点与缺点区段
+        self._write_jsonl(
+            self._data_dir("heartbeat_logs") / f"{summary['采集终端']}_shift_summary.jsonl",
+            [{"summary_id": summary["汇总编号"],
+              "handover_id": summary["交接编号"],
+              "terminal": summary["采集终端"],
+              "point": summary["测点编号"],
+              "old_shift_received": summary["关联落盘点"]["旧班"],
+              "new_shift_received": summary["关联落盘点"]["新班"],
+              "normal_defects": summary["常规缺点"]["合计缺点"],
+              "normal_defect_ranges": summary["常规缺点"]["区段"],
+              "high_temp_ranges": summary["高温复采区段"],
+              "replay_ranges": summary["补采区段"]["区段"],
+              "unissued": not summary["是否签发"],
+              "generated_at": summary["生成时刻"]}]
+        )
+        return summary
+
+    def summarize_all_shifts(self, role: str | None = None) -> dict[str, Any]:
+        """汇总所有仍在交接中的班次落盘点，供值守统一复采。"""
+        handovers = store.rows("shift_handover")
+        summaries = []
+        for row in handovers:
+            if row.get("status") in ("已取消",):
+                continue
+            try:
+                summaries.append(self.summarize_shift(row["id"], role=role))
+            except Exception as exc:  # 交接表未就绪时不影响心跳主流程
+                summaries.append({"handover_id": row.get("交接编号"), "error": str(exc)})
+        return {
+            "total": len(summaries),
+            "normal_defects": sum(
+                int(item.get("常规缺点", {}).get("合计缺点", 0)) for item in summaries),
+            "high_temp_ranges": sum(
+                len(item.get("高温复采区段", [])) for item in summaries),
+            "summaries": summaries,
+        }
+
     def scan_all_terminals(self) -> dict[str, Any]:
         """批量扫描所有采集终端的心跳记录进行健康状态汇总诊断。"""
         all_hbs = store.rows(self.MODULE)

@@ -56,6 +56,7 @@
               class="link"
               type="button"
               :data-testid="`action-${row.id}-${action}`"
+              :disabled="actionDisabled(action, row)"
               @click="runAction(action, row)"
             >
               {{ action }}
@@ -75,7 +76,11 @@
         <h3>登记{{ meta.entity }}</h3>
         <label v-for="field in meta.fields" :key="field" class="create-field">
           <span>{{ field }}</span>
-          <input v-model="createValues[field]" :data-testid="`create-${field}`" required />
+          <input
+            v-model="createValues[field]"
+            :data-testid="`create-${field}`"
+            :required="!meta.requiredFields || meta.requiredFields.includes(field)"
+          />
         </label>
         <div class="page-actions">
           <button class="btn" type="button" @click="showCreate = false">取消</button>
@@ -85,6 +90,12 @@
         </div>
       </form>
     </div>
+
+    <ShiftHandoverPanel
+      v-if="meta.key === 'shift_handover'"
+      v-model:role="handoverRole"
+      :entries="rows"
+    />
 
     <footer class="page-foot">
       <span>共 {{ total }} 条{{ meta.name }}记录</span>
@@ -104,6 +115,7 @@ import {
   runAction as applyAction,
 } from '@/api/backend-service'
 import type { EntryRow } from '@/data/types'
+import ShiftHandoverPanel from '@/views/ShiftHandoverPanel.vue'
 
 const props = defineProps<{ moduleKey: string }>()
 const meta = moduleMeta(props.moduleKey)
@@ -115,6 +127,22 @@ const filterFields = meta.fields.slice(0, 3)
 const showCreate = ref(false)
 const creating = ref(false)
 const createValues = ref<Record<string, string>>({})
+const handoverRole = ref(meta.key === 'shift_handover' ? '旧班负责人' : '')
+const HANDOVER_CONFIRM_ROLE: Record<string, string> = { 确认旧班: '旧班负责人', 确认新班: '接班人' }
+
+function actionDisabled(action: string, row: EntryRow): boolean {
+  if (meta.key !== 'shift_handover') return false
+  const status = String(row.status)
+  if (handoverRole.value === '观察者') return true
+  if (handoverRole.value === '计量负责人' && action !== '取消交接') return true
+  if (action === '启动交接') return status !== '草稿'
+  if (action === '确认旧班' || action === '确认新班') {
+    return HANDOVER_CONFIRM_ROLE[action] !== handoverRole.value || !['核对中', '待签发'].includes(status)
+  }
+  if (action === '签发交接') return status !== '待签发'
+  if (action === '取消交接') return status === '已签发' || status === '已取消'
+  return false
+}
 const stats = computed(() => [
   { label: meta.metrics[0], value: total.value },
   { label: meta.metrics[1], value: rows.value.filter((row) => row.status === meta.statuses[1]).length },
@@ -168,7 +196,7 @@ async function submitCreate() {
 async function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
   try {
-    const result = await applyAction(meta.key, Number(row.id), action)
+    const result = await applyAction(meta.key, Number(row.id), action, handoverRole.value)
     if (!result.ok) throw new Error(result.message)
     await reload()
   } catch (error) {

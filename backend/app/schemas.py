@@ -29,3 +29,25 @@ class EntryPayload(BaseModel):
 class ActionPayload(BaseModel):
     action: str
     remark: str | None = None
+    role: str | None = None
+
+
+class EvidencePayload(BaseModel):
+    moment: str
+    value: float
+    source_type: str = "终端原件"
+    role: str | None = None
+    submitter: str | None = None
+
+
+class SignOffPayload(BaseModel):
+    evidence_id: str
+    shift: str
+    role: str | None = None
+    signer: str | None = None
+
+
+class ReplayPayload(BaseModel):
+    samples: list[dict[str, Any]] = Field(default_factory=list)
+    role: str | None = None
+    submitter: str | None = None

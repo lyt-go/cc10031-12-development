@@ -18,6 +18,8 @@ export type ModuleMeta = {
   actions: string[]
   actionTargets: Record<string, string>
   metrics: string[]
+  /** 登记表单里必须填写的字段；省略时默认全部字段必填。 */
+  requiredFields?: string[]
 }
 
 export type PageResult = {

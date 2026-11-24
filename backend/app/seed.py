@@ -653,3 +653,74 @@ SEED_ROWS: dict[str, list[dict[str, Any]]] = {
   '快照水位': '序列快照样例3',
   '生成时间': '2026-09-03'}]
 }
+
+def _build_shift_handover_seed() -> list[dict[str, Any]]:
+    """班次交接样例：班界 08:00，旧班 07:45-07:59，新班 08:00-08:15。
+
+    07:52-07:54 与 08:05 没有采样，形成当前缺点；07:59 终端原件是 81 度，
+    接班人随后会补交同一原始采样时刻的校准缓存 82 度。
+    """
+    from datetime import datetime, timedelta
+
+    boundary = datetime(2026, 11, 24, 8, 0, 0)
+    old_start = boundary - timedelta(minutes=15)
+    new_end = boundary + timedelta(minutes=15)
+    values = {
+        "07:45": 81.0, "07:46": 81.1, "07:47": 80.9, "07:48": 81.2,
+        "07:49": 81.0, "07:50": 81.1, "07:51": 81.3,
+        "07:55": 81.2, "07:56": 81.4, "07:57": 82.0, "07:58": 82.0, "07:59": 81.0,
+        "08:00": 80.6, "08:01": 80.7, "08:02": 80.8, "08:03": 80.9, "08:04": 81.0,
+        "08:06": 81.1, "08:07": 81.2, "08:08": 81.0, "08:09": 80.9, "08:10": 81.1,
+        "08:11": 81.2, "08:12": 81.3, "08:13": 81.1, "08:14": 81.0,
+    }
+    evidence = []
+    for minute in range(30):
+        moment = old_start + timedelta(minutes=minute)
+        key = moment.strftime("%H:%M")
+        if key not in values:
+            continue
+        evidence.append({
+            "证据编号": f"EV-HAND-20261124-01-{len(evidence) + 1:02d}",
+            "采样时刻": moment.strftime("%Y-%m-%dT%H:%M:%S"),
+            "数值": values[key],
+            "来源类型": "终端原件",
+            "归属班次": "旧班" if moment < boundary else "新班",
+            "提交角色": "outgoing" if moment < boundary else "incoming",
+            "提交人": "旧班负责人" if moment < boundary else "接班人",
+            "提交时刻": moment.strftime("%Y-%m-%dT%H:%M:%S"),
+            "接收顺序": len(evidence) + 1,
+            "状态": "待核对",
+            "计量签认": None,
+        })
+    return [{
+        "id": 1,
+        "status": "草稿",
+        "pending": True,
+        "abnormal": False,
+        "交接编号": "HAND-20261124-01",
+        "测点编号": "SENS-TEMP-01",
+        "采集终端": "T-EDGE-01",
+        "班次日期": "2026-11-24",
+        "班界时刻": boundary.strftime("%Y-%m-%dT%H:%M:%S"),
+        "旧班实收": 0,
+        "新班实收": 0,
+        "旧班缺点": 0,
+        "新班缺点": 0,
+        "采用温度": "—",
+        "班次窗口": {
+            "旧班起点": old_start.strftime("%Y-%m-%dT%H:%M:%S"),
+            "新班终点": new_end.strftime("%Y-%m-%dT%H:%M:%S"),
+        },
+        "采样间隔秒": 60,
+        "高温阈值": 81.5,
+        "高温连续次数": 3,
+        "证据": evidence,
+        "确认记录": {},
+        "补采区段": [],
+        "审计日志": [],
+        "是否签发": False,
+        "启动时缺点": 0,
+    }]
+
+
+SEED_ROWS["shift_handover"] = _build_shift_handover_seed()

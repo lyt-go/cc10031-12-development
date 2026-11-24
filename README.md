@@ -61,6 +61,7 @@ npm run dev
 | 窗口归并 | `rollup_window` | 归并窗口 | 窗口编号、测点编号、窗口类型 |
 | 序列索引 | `series_index` | 索引分区 | 索引编号、测点编号、时间分区 |
 | 冷热分层 | `tier_storage` | 分层策略 | 策略编号、时间边界、热区范围 |
+| 班次交接 | `shift_handover` | 交接记录 | 交接编号、测点编号、采集终端、班界时刻、班次实收/缺点 |
 | 采集心跳 | `device_health` | 心跳记录 | 心跳编号、采集终端、上报时刻 |
 | 接入水位 | `ingest_watermark` | 水位标记 | 水位编号、测点编号、事件时间水位 |
 | 区间重采 | `range_replay` | 重采任务 | 重采编号、测点编号、起始时刻 |
@@ -76,6 +77,10 @@ npm run dev
   `frontend/src/domain/<模块>.ts`，用于承载真实业务差异并维持36题位容量。
 - 列表接口统一返回 `{ items, total, page, size }`，动作接口统一返回 `{ ok, message }`。
 - 状态流转只允许在 `app/services` 里改，路由层不做业务判断。
+- 班次交接按原始采样时刻归属班次（默认班界 08:00），同一采样时刻可留存多份
+  证据但每次实收只采用一个观测；校准缓存需计量负责人签认后才能作为班次实收
+  依据，观察者只读。交接表与心跳汇总接口见
+  `shift_handover/{id}/sheet`、`device_health/shift_summary`。
 
 领域：数据工程
 子方向：数据采集、爬虫与RPA
